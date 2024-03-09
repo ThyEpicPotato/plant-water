@@ -29,11 +29,11 @@ typedef struct task {
    int (*TickFct)(int);        // Task tick function
 } task;
 
-const unsigned char tasksNum = 1;
+const unsigned char tasksNum = 2;
 task tasks[tasksNum];
 
 // Task Periods
-//const unsigned long periodLCDOutput = 100;
+const unsigned long periodLCDOutput = 100;
 const unsigned long periodJoystickInput = 100;
 //const unsigned long periodSoundOutput = 100;
 //const unsigned long periodController = 100;
@@ -43,13 +43,13 @@ const unsigned long periodJoystickInput = 100;
 const unsigned long tasksPeriodGCD = 100;
 
 // Task Function Definitions
-//int TickFct_LCDOutput(int state);
+int TickFct_LCDOutput(int state);
 int TickFct_JoystickInput(int state);
 //int TickFct_SoundOutput(int state);
 //int TickFct_Controller(int state);
 
 // Task Enumeration Definitions
-//enum LO_States {LO_init, LO_Update};
+enum LO_States {LO_init, LO_Update};
 enum JI_States {JI_init, JI_Sample};
 //enum SO_States {SO_init, SO_SoundOn, SO_SoundOff};
 //enum C_States {C_init, C_Off, C_Song1_Trans, C_Song1, C_Song2, C_Song3, C_Song2_Trans, C_Song3_Trans};
@@ -129,7 +129,24 @@ int TickFct_JoystickInput(int state) {
 }
 
 // Task 2 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+int TickFct_LCDOutput(int state) {
+  switch (state) { // State Transitions
+    case LO_init:
+      state = LO_Update;
+    break;
 
+    case LO_Update:
+      state = LO_Update;
+    break;
+  }
+
+  switch (state) { // State Actions
+    case LO_Update:
+      LCDWriteLines(line1, line2);
+    break;
+  }
+  return state;
+}
 // Task 3 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Task 4 ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,13 +155,12 @@ int TickFct_JoystickInput(int state) {
 
 void InitializeTasks() {
   unsigned char i=0;
-  /*
   tasks[i].state = LO_init;
+
   tasks[i].period = periodLCDOutput;
   tasks[i].elapsedTime = tasks[i].period;
   tasks[i].TickFct = &TickFct_LCDOutput;
   ++i;
-  */ 
   tasks[i].state = JI_init;
   tasks[i].period = periodJoystickInput;
   tasks[i].elapsedTime = tasks[i].period;
@@ -184,7 +200,6 @@ void setup()
   pinMode(pumpPin, OUTPUT);
   pinMode(soilPower, OUTPUT); //Set D7 as an OUTPUT
   digitalWrite(soilPower, LOW); //Set to LOW so no power is flowing through the sensor
-  LCDWriteLines(line1, line2);
   //digitalWrite(pumpPin, HIGH);
 
   
