@@ -1,6 +1,8 @@
 // Tape pulls
 // https://www.arduino.cc/reference/en/libraries/queue/
 // https://learn.sparkfun.com/tutorials/soil-moisture-sensor-hookup-guide
+// 892 Max moisture
+// ### Min moisture
 
 #include "DHT.h"
 #include "Timer.h"
@@ -64,6 +66,7 @@ int soilPin = A1;
 int soilPower = 5;
 int pumpPin = 3;
 float f = 0;
+int threshold;
 
 Queue tempData;
 Queue humidData;
@@ -82,14 +85,14 @@ typedef struct task {
    int (*TickFct)(int);        // Task tick function
 } task;
 
-const unsigned char tasksNum = 3;
+const unsigned char tasksNum = 4;
 task tasks[tasksNum];
 
 // Task Periods
-const unsigned long periodLCDOutput = 100;
-const unsigned long periodJoystickInput = 100;
+const unsigned long periodLCDOutput = 100; // 0.1 sec
+const unsigned long periodJoystickInput = 100; // 0.1 sec
 const unsigned long periodTempHumidInput = 3600000; // Every 60 mins 
-//const unsigned long periodSoundOutput = 100;
+const unsigned long periodSoilInput = 10000; // 10 sec
 //const unsigned long periodController = 100;
 //const unsigned long periodCursor = 100;
 
@@ -106,7 +109,7 @@ int TickFct_JoystickInput(int state);
 enum LO_States {LO_init, LO_Update}; //LCD Output
 enum JI_States {JI_init, JI_Sample}; // Joystick Input
 enum TH_States {TH_init, TH_Sample}; // Temperature Humidity
-//enum SO_States {SO_init, SO_SoundOn, SO_SoundOff};
+enum SI_States {SI_init, SI_Sample}; // Soil Input
 //enum C_States {C_init, C_Off, C_Song1_Trans, C_Song1, C_Song2, C_Song3, C_Song2_Trans, C_Song3_Trans};
 enum JS_Positions {Up, Down, Left, Right, Neutral} JS_Pos = Neutral;
 //enum CP_States {CP_init, CP_TL, CP_TR, CP_BL, CP_BR};
@@ -237,6 +240,25 @@ int TickFct_TempHumidInput(int state) {
 }
 
 // Task 4 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+int TickFct_SoilInput(int state) {
+  switch (state) { // State Transitions
+    case SI_init:
+    state = SI_Sample;
+    break;
+    case SI_Sample:
+    break;
+  }
+
+   switch (state) { // State Actions
+    case SI_Sample:
+      moist_val = readSoil();
+      Serial.print("Moisture: ");
+      Serial.println(moist_val);
+    break;
+  }
+  
+  return state;
+}
 
 // Task 5 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -256,13 +278,13 @@ void InitializeTasks() {
   tasks[i].period = periodTempHumidInput;
   tasks[i].elapsedTime = tasks[i].period;
   tasks[i].TickFct = &TickFct_TempHumidInput;
+  ++i;  
+  tasks[i].state = SI_init;
+  tasks[i].period = periodSoilInput;
+  tasks[i].elapsedTime = tasks[i].period;
+  tasks[i].TickFct = &TickFct_SoilInput;
   ++i;
   /*
-  tasks[i].state = C_init;
-  tasks[i].period = periodController;
-  tasks[i].elapsedTime = tasks[i].period;
-  tasks[i].TickFct = &TickFct_Controller;
-  ++i;
   tasks[i].state = CP_init;
   tasks[i].period = periodCursor;
   tasks[i].elapsedTime = tasks[i].period;
