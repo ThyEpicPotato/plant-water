@@ -65,7 +65,8 @@ int moist_val = 0;
 int soilPin = A1;
 int soilPower = 5;
 int pumpPin = 3;
-float f = 0;
+float f = 0; // Latest temp reading
+float h = 0; // Latest Humidity Reading
 int threshold;
 
 Queue tempData;
@@ -92,7 +93,7 @@ task tasks[tasksNum];
 const unsigned long periodLCDOutput = 100; // 0.1 sec
 const unsigned long periodJoystickInput = 100; // 0.1 sec
 const unsigned long periodTempHumidInput = 3600000; // Every 60 mins 
-const unsigned long periodSoilInput = 10000; // 10 sec
+const unsigned long periodSoilInput = 1800000; // 30 min
 //const unsigned long periodController = 100;
 //const unsigned long periodCursor = 100;
 
@@ -226,11 +227,12 @@ int TickFct_TempHumidInput(int state) {
       Serial.print("Temp ");
       tempData.output();
       
-      float humidty = dht.readHumidity();
-      humidData.push(humidty);
+      float humidity = dht.readHumidity();
+      h = humidity;
+      humidData.push(humidity);
 
       Serial.print("Humidity: ");
-      Serial.println(humidty); 
+      Serial.println(humidity); 
       Serial.print("Humidity ");     
       humidData.output();
     break;
@@ -309,14 +311,13 @@ void setup()
   pinMode(soilPower, OUTPUT); //Set D7 as an OUTPUT
   digitalWrite(soilPower, LOW); //Set to LOW so no power is flowing through the sensor
   Serial.println("");
-  //digitalWrite(pumpPin, HIGH);
 
-  
+  //digitalWrite(pumpPin, HIGH);
 }
 
 void loop() 
 {  
-  f = dht.readTemperature(true);
+  f = dht.readTemperature(true); // Only works properly in loop for some reason
   /*
         Serial.print(F("Temperature: "));
         Serial.print(f);
@@ -357,9 +358,9 @@ void loop()
 //This is a function used to get the soil moisture content
 int readSoil()
 {
-  digitalWrite(soilPower, HIGH); //turn D7 "On"
-  delay(10); //wait 10 milliseconds 
-  moist_val = analogRead(soilPin); //Read the SIG value form sensor 
-  digitalWrite(soilPower, LOW); //turn D7 "Off"
-  return moist_val; //send current moisture value
+  digitalWrite(soilPower, HIGH);
+  delay(10);
+  moist_val = analogRead(soilPin); 
+  digitalWrite(soilPower, LOW);
+  return moist_val;
 }
