@@ -107,7 +107,11 @@ int TickFct_JoystickInput(int state);
 //int TickFct_Controller(int state);
 
 // Task Enumeration Definitions
-enum LO_States {LO_init, LO_Update}; //LCD Output
+enum LO_States {LO_init, 
+                Temp, Temp_To_Threshold, Temp_To_Humidity,
+                Threshold, Threshold_To_Temp, Threshold_To_Light, 
+                Light, Light_To_Threshold, Light_To_Humidity,
+                Humidity, Humidity_To_Light, Humidity_To_Temp}; //LCD Output
 enum JI_States {JI_init, JI_Sample}; // Joystick Input
 enum TH_States {TH_init, TH_Sample}; // Temperature Humidity
 enum SI_States {SI_init, SI_Sample}; // Soil Input
@@ -192,16 +196,82 @@ int TickFct_JoystickInput(int state) {
 int TickFct_LCDOutput(int state) {
   switch (state) { // State Transitions
     case LO_init:
-      state = LO_Update;
+      state = Temp;
     break;
-
-    case LO_Update:
-      state = LO_Update;
+    //Temp states
+    case Temp:
+      if(/*Joystick left*/){
+        state = Temp_To_Threshold;
+      }
+      if(/*Joystick right*/){
+        state = Temp_To_Humidity;
+      }
+    case Temp_To_Threshold:
+      if(/*Joystick Neutral*/){
+        state = Threshold;
+      }
+    case Temp_To_Humidity:
+      if(/*Joystick Neutral*/){
+        state = Humidity;
+      }
+    //Threshold states
+    case Threshold:
+      if(/*Joystick left*/){
+        state = Threshold_To_Light;
+      }
+      if(/*Joystick right*/){
+        state = Threshold_To_Temp;
+      }
+    case Threshold_To_Light:
+      if(/*Joystick Neutral*/){
+        state = Light;
+      }
+    case Threshold_To_Temp:
+      if(/*Joystick Neutral*/){
+        state = Temp;
+      }
+    //Light states
+    case Light:
+      if(/*Joystick left*/){
+        state = Light_To_Humidity;
+      }
+      if(/*Joystick right*/){
+        state = Threshold_To_Temp;
+      }
+    case Light_To_Humidity:
+      if(/*Joystick Neutral*/){
+        state = Humidity;
+      }
+    case Threshold_To_Temp:
+      if(/*Joystick Neutral*/){
+        state = Temp;
+      }
+    //Humidity
+    case Humidity:
+      if(/*Joystick left*/){
+        state = Humidity_To_Temp;
+      }
+      if(/*Joystick right*/){
+        state = Humidity_To_Light;
+      }
+    case Humidity_To_Temp:
+      if(/*Joystick Neutral*/){
+        state = Temp;
+      }
+    case Humidity_To_Light:
+      if(/*Joystick Neutral*/){
+        state = Light;
+      }
     break;
   }
 
   switch (state) { // State Actions
-    case LO_Update:
+    case LO_init:
+      lcd.begin(16, 2);
+      lcd.display();
+    case Temp:
+      line1 = "Temp: ";
+      line2 = "Avg. Temp:";
       LCDWriteLines(line1, line2);
     break;
   }
