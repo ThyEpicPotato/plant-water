@@ -103,8 +103,8 @@ const unsigned long tasksPeriodGCD = 100;
 // Task Function Definitions
 int TickFct_LCDOutput(int state);
 int TickFct_JoystickInput(int state);
-//int TickFct_SoundOutput(int state);
-//int TickFct_Controller(int state);
+int TickFct_TempHumidInput(int state);
+int TickFct_SoilInput(int state);
 
 // Task Enumeration Definitions
 enum LO_States {LO_init, LO_Update}; //LCD Output
