@@ -58,6 +58,22 @@ void Queue::output() {
   Serial.println("]");
 }
 
+float Queue::avgDaylightHours() {
+  float avg = 0;
+
+  for (int i = 0; i < length; i++) {
+    if (data[i] >= 60) {
+      avg += 1;
+    }
+  }
+
+  avg = avg / float(length);
+
+  avg *= 24;
+
+  return avg;
+}
+
 DHT dht(DHTPIN, DHTTYPE);
 
 // Variables
@@ -71,6 +87,7 @@ int threshold;
 
 Queue tempData;
 Queue humidData;
+Queue lightData;
 
 String line1 = "Line 1 temp";
 String line2 = "Line 2 temp";
@@ -86,7 +103,7 @@ typedef struct task {
    int (*TickFct)(int);        // Task tick function
 } task;
 
-const unsigned char tasksNum = 4;
+const unsigned char tasksNum = 5;
 task tasks[tasksNum];
 
 // Task Periods
@@ -94,6 +111,7 @@ const unsigned long periodLCDOutput = 100; // 0.1 sec
 const unsigned long periodJoystickInput = 100; // 0.1 sec
 const unsigned long periodTempHumidInput = 3600000; // Every 60 mins 
 const unsigned long periodSoilInput = 1800000; // 30 min
+const unsigned long periodLightInput = 5000; // 60 min
 //const unsigned long periodController = 100;
 //const unsigned long periodCursor = 100;
 
@@ -105,12 +123,14 @@ int TickFct_LCDOutput(int state);
 int TickFct_JoystickInput(int state);
 int TickFct_TempHumidInput(int state);
 int TickFct_SoilInput(int state);
+int TickFct_LightInput(int state);
 
 // Task Enumeration Definitions
 enum LO_States {LO_init, LO_Update}; //LCD Output
 enum JI_States {JI_init, JI_Sample}; // Joystick Input
 enum TH_States {TH_init, TH_Sample}; // Temperature Humidity
 enum SI_States {SI_init, SI_Sample}; // Soil Input
+enum LI_States {LI_init, LI_Sample}; // Light Input
 //enum C_States {C_init, C_Off, C_Song1_Trans, C_Song1, C_Song2, C_Song3, C_Song2_Trans, C_Song3_Trans};
 enum JS_Positions {Up, Down, Left, Right, Neutral} JS_Pos = Neutral;
 //enum CP_States {CP_init, CP_TL, CP_TR, CP_BL, CP_BR};
@@ -263,6 +283,33 @@ int TickFct_SoilInput(int state) {
 }
 
 // Task 5 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+int TickFct_LightInput(int state) {
+  switch (state) { // State Transitions
+    case LI_init:
+    state = LI_Sample;
+    //Serial.println("test");
+    break;
+    case LI_Sample:
+    break;
+  }
+
+   switch (state) { // State Actions
+    case LI_Sample:
+      int light = analogRead(A0);
+      lightData.push(light);
+
+      Serial.print("Light: ");
+      Serial.println(light);
+      Serial.print("Light ");
+      lightData.output();
+      Serial.print("Average Daylight: ");
+      Serial.println(lightData.avgDaylightHours());
+    
+    break;
+  }
+  
+  return state;
+}
 
 void InitializeTasks() {
   unsigned char i=0;
@@ -285,6 +332,11 @@ void InitializeTasks() {
   tasks[i].period = periodSoilInput;
   tasks[i].elapsedTime = tasks[i].period;
   tasks[i].TickFct = &TickFct_SoilInput;
+  ++i;
+  tasks[i].state = LI_init;
+  tasks[i].period = periodLightInput;
+  tasks[i].elapsedTime = tasks[i].period;
+  tasks[i].TickFct = &TickFct_LightInput;
   ++i;
   /*
   tasks[i].state = CP_init;

@@ -10,6 +10,8 @@ class Queue {
 
     void output();
 
+    float avgDaylightHours();
+
     int length;
 
   private:
