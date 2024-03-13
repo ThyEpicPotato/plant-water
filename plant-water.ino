@@ -48,14 +48,14 @@ float Queue::getAverage() {
 
 void Queue::output() {
   
-  Serial.print("Values: [");
+  //Serial.print("Values: [");
 
   for (int i = 0; i < length; i++) {
-    Serial.print(data[i]);
-    Serial.print(", ");
+    //Serial.print(data[i]);
+    //Serial.print(", ");
   }
 
-  Serial.println("]");
+  //Serial.println("]");
 }
 
 float Queue::avgDaylightHours() {
@@ -85,6 +85,7 @@ float f = 0; // Latest temp reading
 float h = 0; // Latest Humidity Reading
 int threshold = 892;
 int pump_flag = 0;
+int screen_flag = 0;
 
 Queue tempData;
 Queue humidData;
@@ -104,7 +105,7 @@ typedef struct task {
    int (*TickFct)(int);        // Task tick function
 } task;
 
-const unsigned char tasksNum = 6;
+const unsigned char tasksNum = 7;
 task tasks[tasksNum];
 
 // Task Periods
@@ -114,8 +115,7 @@ const unsigned long periodTempHumidInput = 3600000; // Every 60 mins
 const unsigned long periodSoilInput = 900000; // 15 min
 const unsigned long periodLightInput = 3600000; // 60 min
 const unsigned long periodPumpController = 1000; // 0.1 sec 
-//const unsigned long periodController = 100;
-//const unsigned long periodCursor = 100;
+const unsigned long periodDisplayController = 100; // 0.1 sec
 
 // GCD 
 const unsigned long tasksPeriodGCD = 100;
@@ -127,56 +127,62 @@ int TickFct_TempHumidInput(int state);
 int TickFct_SoilInput(int state);
 int TickFct_LightInput(int state);
 int TickFct_PumpController(int state);
+int TickFct_DisplayController(int state);
 
 // Task Enumeration Definitions
-enum LO_States {LO_init, 
-                Temp, Temp_To_Threshold, Temp_To_Humidity,
-                Threshold, Threshold_To_Temp, Threshold_To_Light, 
-                Light, Light_To_Threshold, Light_To_Humidity,
-                Humidity, Humidity_To_Light, Humidity_To_Temp}; //LCD Output
+enum LO_States {LO_init, LO_Update}; //LCD Output
+enum DC_States {DC_init, DC_Temp, DC_ToTemp, DC_Threshold, DC_ToThreshold, DC_Light, DC_ToLight, DC_Humidity, DC_ToHumidity}; // Display Controller
 enum JI_States {JI_init, JI_Sample}; // Joystick Input
 enum TH_States {TH_init, TH_Sample}; // Temperature Humidity
 enum SI_States {SI_init, SI_Sample}; // Soil Input
 enum LI_States {LI_init, LI_Sample}; // Light Input
 enum PC_States {PC_init, PC_Wait, PC_On}; // Pump Controller
-//enum C_States {C_init, C_Off, C_Song1_Trans, C_Song1, C_Song2, C_Song3, C_Song2_Trans, C_Song3_Trans};
 enum JS_Positions {Up, Down, Left, Right, Neutral} JS_Pos = Neutral;
-//enum CP_States {CP_init, CP_TL, CP_TR, CP_BL, CP_BR};
-//enum Cursor_Positions {TopLeft, TopRight, BotLeft, BotRight} C_Pos = BotRight;
-//int buttonState = 1;
 
 void LCDWriteLines(String line1, String line2) {
   lcd.clear();          
   lcd.setCursor(0, 0);
   lcd.print(line1);
-  lcd.setCursor(0,1);
+  lcd.setCursor(0, 1);
   lcd.print(line2);
+}
+
+int readSoil()
+{
+  digitalWrite(soilPower, HIGH);
+  delay(10);
+  moist_val = analogRead(soilPin); 
+  digitalWrite(soilPower, LOW);
+  return moist_val;
 }
 
 void TimerISR() {
   /*
   if (JS_Pos == Up) {
-    Serial.println("Up");
+    //Serial.println("Up");
   }
   else if (JS_Pos == Down) {
-    Serial.println("Down");
+    //Serial.println("Down");
   }
   else if (JS_Pos == Left) {
-    Serial.println("Left");
+    //Serial.println("Left");
   }
   else if (JS_Pos == Right) {
-    Serial.println("Right");
+    //Serial.println("Right");
   }
   else if (JS_Pos == Neutral) {
-    Serial.println("Neutral");
+    //Serial.println("Neutral");
   }
   */
   
   unsigned char i;
   for (i = 0; i < tasksNum; ++i) { // Heart of the scheduler code
      if ( tasks[i].elapsedTime >= tasks[i].period ) { // Ready
+        ////Serial.print("SM: ");
+        ////Serial.println(i);
         tasks[i].state = tasks[i].TickFct(tasks[i].state);
         tasks[i].elapsedTime = 0;
+
      }
      tasks[i].elapsedTime += tasksPeriodGCD;
   }
@@ -220,166 +226,175 @@ int TickFct_JoystickInput(int state) {
 int TickFct_LCDOutput(int state) {
   switch (state) { // State Transitions
     case LO_init:
-      state = Temp;
+      state = LO_Update;
+    break;
+
+    case LO_Update:
+      state = LO_Update;
+    break;
+  }
+
+  switch (state) { // State Actions
+    case LO_Update:
+      if (screen_flag == 0) {
+        line1 = "Line 1 temp";
+        line2 = "Line 2 temp";
+      }
+      else if (screen_flag == 1) {
+        line1 = "Temp: ";
+        line2 = "Avg Temp:";
+      }
+      else if (screen_flag == 2) {
+        line1 = "Humidity: ";
+        line2 = "Avg Humidity: ";
+      }
+      else if (screen_flag == 3) {
+        line1 = "Measured Light: ";
+        line2 = "Avg Light: ";
+      }
+      else if (screen_flag == 4) {
+        line1 = "To Do";
+        line2 = "Threshold";
+      }
+      LCDWriteLines(line1, line2);
+    break;
+  }
+  return state;
+}
+
+// Task 3 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+int TickFct_DisplayController(int state) {
+  ////Serial.print("State: ");
+  ////Serial.println(state);
+  switch (state) { // State Transitions
+    case DC_init:
+      state = DC_Temp;
       break;
+
     //Temp states
-    case Temp:
-      if(/*Joystick left*/){
-        state = Temp_To_Threshold;
+    case DC_Temp:
+      if(JS_Pos == Left){
+        state = DC_ToThreshold;
       }
-      if(/*Joystick right*/){
-        state = Temp_To_Humidity;
+      else if(JS_Pos == Right){
+        state = DC_ToHumidity;
       }
-      break;
-    case Temp_To_Threshold:
-      if(/*Joystick Neutral*/){
-        state = Threshold;
+      else {
+        state = DC_Temp;
       }
       break;
-    case Temp_To_Humidity:
-      if(/*Joystick Neutral*/){
-        state = Humidity;
+    case DC_ToTemp:
+      if(JS_Pos != Neutral){
+        state = DC_ToTemp;
+      }
+      else {
+        state = DC_Temp;
       }
       break;
+      
     //Threshold states
-    case Threshold:
-      if(/*Joystick left*/){
-        state = Threshold_To_Light;
+    case DC_Threshold:
+      if(JS_Pos == Left){
+        state = DC_ToLight;
       }
-      if(/*Joystick right*/){
-        state = Threshold_To_Temp;
+      else if(JS_Pos == Right){
+        state = DC_ToTemp;
       }
-      break;
-    case Threshold_To_Light:
-      if(/*Joystick Neutral*/){
-        state = Light;
+      else {
+        state = DC_Threshold;
       }
       break;
-    case Threshold_To_Temp:
-      if(/*Joystick Neutral*/){
-        state = Temp;
+    case DC_ToThreshold:
+      if(JS_Pos != Neutral){
+        state = DC_ToThreshold;
+      }
+      else {
+        state = DC_Threshold;
       }
       break;
+
     //Light states
-    case Light:
-      if(/*Joystick left*/){
-        state = Light_To_Humidity;
+    case DC_Light:
+      if(JS_Pos == Left){
+        state = DC_ToHumidity;
       }
-      if(/*Joystick right*/){
-        state = Threshold_To_Temp;
+      else if(JS_Pos == Right){
+        state = DC_ToThreshold;
       }
-      break;
-    case Light_To_Humidity:
-      if(/*Joystick Neutral*/){
-        state = Humidity;
+      else {
+        state = DC_Light;
       }
       break;
-    case Threshold_To_Temp:
-      if(/*Joystick Neutral*/){
-        state = Temp;
+    case DC_ToLight:
+      if(JS_Pos != Neutral){
+        state = DC_ToLight;
+      }
+      else {
+        state = DC_Light;
       }
       break;
+
     //Humidity
-    case Humidity:
-      if(/*Joystick left*/){
-        state = Humidity_To_Temp;
+    case DC_Humidity:
+      if(JS_Pos == Left){
+        state = DC_ToTemp;
       }
-      if(/*Joystick right*/){
-        state = Humidity_To_Light;
+      if(JS_Pos == Right){
+        state = DC_ToLight;
       }
-      break;
-    case Humidity_To_Temp:
-      if(/*Joystick Neutral*/){
-        state = Temp;
+      else {
+        state = DC_Humidity;
       }
       break;
-    case Humidity_To_Light:
-      if(/*Joystick Neutral*/){
-        state = Light;
+    case DC_ToHumidity:
+      if(JS_Pos != Neutral){
+        state = DC_ToHumidity;
       }
-      break;
-    default:
+      else {
+        state = DC_Humidity;
+      }
       break;
   }
 
   switch (state) { // State Actions
-    case LO_init:
-      lcd.begin(16, 2);
-      lcd.display();
+    case DC_init:
       break;
+
     //Temp states
-    case Temp:
-      line1 = "Temp: ";
-      line2 = "Avg. Temp:";
-      LCDWriteLines(line1, line2);
+    case DC_Temp:
+      screen_flag = 1;
       break;
-    case Temp_To_Threshold:
-      line1 = "To Do";
-      line2 = "Threshold";
-      LCDWriteLines(line1, line2);
+    case DC_ToTemp:
+      screen_flag = 1;
       break;
-    case Temp_To_Humidity:
-      line1 = "Humidity: ";
-      line2 = "Avg Humidity: ";
-      LCDWriteLines(line1, line2);
-      break;
+
     //Threshold states
-    case Threshold:
-      line1 = "To Do";
-      line2 = "Threshold";
-      LCDWriteLines(line1, line2);
+    case DC_Threshold:
+      screen_flag = 4;
       break;
-    case Threshold_To_Light:
-      line1 = "Measured Light: ";
-      line2 = "Avg Light: ";
-      LCDWriteLines(line1, line2);
+    case DC_ToThreshold:
+      screen_flag = 4;
       break;
-    case Threshold_To_Temp:
-      line1 = "Temp: ";
-      line2 = "Avg. Temp:";
-      LCDWriteLines(line1, line2);
-      break;
+
     //Light states
-    case Light:
-      line1 = "Measured Light: ";
-      line2 = "Avg Light: ";
-      LCDWriteLines(line1, line2);
+    case DC_Light:
+      screen_flag = 3;
       break;
-    case Light_To_Humidity:
-      line1 = "Humidity: ";
-      line2 = "Avg Humidity: ";
-      LCDWriteLines(line1, line2);
+    case DC_ToLight:
+      screen_flag = 3;
       break;
-    case Threshold_To_Temp:
-      line1 = "Temp: ";
-      line2 = "Avg. Temp:";
-      LCDWriteLines(line1, line2);
-      break;
+
     //Humidity
-    case Humidity:
-      line1 = "Humidity: ";
-      line2 = "Avg Humidity: ";
-      LCDWriteLines(line1, line2);
+    case DC_Humidity:
+      screen_flag = 2;
       break;
-    case Humidity_To_Temp:
-      line1 = "Temp: ";
-      line2 = "Avg. Temp:";
-      LCDWriteLines(line1, line2);
-      break;
-    case Humidity_To_Light:
-      line1 = "Measured Light: ";
-      line2 = "Avg Light: ";
-      LCDWriteLines(line1, line2);
-      break;
-    default:
-      Line1 = "Default case";
-      Line2 = "Possible bug?";
-      LCDWriteLines(line1, line2);
+    case DC_ToHumidity:
+      screen_flag = 2;
       break;
   }
   return state;
 }
-// Task 3 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Task 4 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 int TickFct_TempHumidInput(int state) {
   switch (state) { // State Transitions
     case TH_init:
@@ -394,18 +409,18 @@ int TickFct_TempHumidInput(int state) {
       float fahrenheit = f;
       tempData.push(fahrenheit);
 
-      Serial.print("Temp: ");
-      Serial.println(fahrenheit);
-      Serial.print("Temp ");
+      //Serial.print("Temp: ");
+      //Serial.println(fahrenheit);
+      //Serial.print("Temp ");
       tempData.output();
       
       float humidity = dht.readHumidity();
       h = humidity;
       humidData.push(humidity);
 
-      Serial.print("Humidity: ");
-      Serial.println(humidity); 
-      Serial.print("Humidity ");     
+      //Serial.print("Humidity: ");
+      //Serial.println(humidity); 
+      //Serial.print("Humidity ");     
       humidData.output();
     break;
   }
@@ -413,7 +428,7 @@ int TickFct_TempHumidInput(int state) {
   return state;
 }
 
-// Task 4 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Task 5 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 int TickFct_SoilInput(int state) {
   switch (state) { // State Transitions
     case SI_init:
@@ -429,20 +444,20 @@ int TickFct_SoilInput(int state) {
       if (moist_val < threshold) {
         pump_flag = 1;
       }
-      Serial.print("Moisture: ");
-      Serial.println(moist_val);
+      //Serial.print("Moisture: ");
+      //Serial.println(moist_val);
     break;
   }
   
   return state;
 }
 
-// Task 5 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Task 6 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 int TickFct_LightInput(int state) {
   switch (state) { // State Transitions
     case LI_init:
     state = LI_Sample;
-    //Serial.println("test");
+    ////Serial.println("test");
     break;
     case LI_Sample:
     break;
@@ -453,12 +468,12 @@ int TickFct_LightInput(int state) {
       int light = analogRead(A0);
       lightData.push(light);
 
-      Serial.print("Light: ");
-      Serial.println(light);
-      Serial.print("Light ");
+      //Serial.print("Light: ");
+      //Serial.println(light);
+      //Serial.print("Light ");
       lightData.output();
-      Serial.print("Average Daylight: ");
-      Serial.println(lightData.avgDaylightHours());
+      //Serial.print("Average Daylight: ");
+      //Serial.println(lightData.avgDaylightHours());
     
     break;
   }
@@ -468,7 +483,7 @@ int TickFct_LightInput(int state) {
 
 int i = 0;
 
-// Task 6 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Task 7 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 int TickFct_PumpController(int state) {
   switch (state) { // State Transitions
     case PC_init:
@@ -497,13 +512,13 @@ int TickFct_PumpController(int state) {
    switch (state) { // State Actions
     case PC_Wait:
       digitalWrite(pumpPin, LOW);
-      Serial.println("Pump Off");
+      //Serial.println("Pump Off");
       i = 0;
     break;
 
     case PC_On:
-      digitalWrite(pumpPin, HIGH);
-      Serial.println("Pump On");
+      //digitalWrite(pumpPin, HIGH);
+      //Serial.println("Pump On");
       i++;
     break;
   }
@@ -542,6 +557,11 @@ void InitializeTasks() {
   tasks[i].period = periodPumpController;
   tasks[i].elapsedTime = tasks[i].period;
   tasks[i].TickFct = &TickFct_PumpController;
+  ++i;
+  tasks[i].state = DC_init;
+  tasks[i].period = periodDisplayController;
+  tasks[i].elapsedTime = tasks[i].period;
+  tasks[i].TickFct = &TickFct_DisplayController;
   
 }
 
@@ -553,7 +573,7 @@ void setup()
   TimerSet(tasksPeriodGCD);
   TimerOn();
 
-  Serial.begin(9600);
+  //Serial.begin(9600);
 
   dht.begin();
   lcd.begin(16, 2);
@@ -561,7 +581,7 @@ void setup()
   pinMode(pumpPin, OUTPUT);
   pinMode(soilPower, OUTPUT); //Set D7 as an OUTPUT
   digitalWrite(soilPower, LOW); //Set to LOW so no power is flowing through the sensor
-  Serial.println("");
+  //Serial.println("");
   digitalWrite(pumpPin, LOW);
 }
 
@@ -570,9 +590,10 @@ void loop()
   f = dht.readTemperature(true); // Only works properly in loop for some reason
   //digitalWrite(pumpPin, HIGH);
   /*
-        Serial.print(F("Temperature: "));
-        Serial.print(f);
-        Serial.println(F("°F"));
+  LCDWriteLines(line1, line2);
+        //Serial.print(F("Temperature: "));
+        //Serial.print(f);
+        //Serial.println(F("°F"));
   
   float h = dht.readHumidity();
   //Celsius
@@ -580,38 +601,29 @@ void loop()
   //Fahrenheit
   f = dht.readTemperature(true);
 
-  Serial.print(F("Light Level: "));
-  Serial.println(analogRead(A0));
-  Serial.print("Soil Moisture = ");    
-  Serial.println(readSoil());
-  Serial.print(F("Humidity: "));
-  Serial.print(h);
-  Serial.println(F("%"));
-  Serial.print(F("Temperature: "));
-  Serial.print(t);
-  Serial.print(F("°C "));
-  Serial.print(f);
-  Serial.println(F("°F"));
-  Serial.println("");
+  //Serial.print(F("Light Level: "));
+  //Serial.println(analogRead(A0));
+  //Serial.print("Soil Moisture = ");    
+  //Serial.println(readSoil());
+  //Serial.print(F("Humidity: "));
+  //Serial.print(h);
+  //Serial.println(F("%"));
+  //Serial.print(F("Temperature: "));
+  //Serial.print(t);
+  //Serial.print(F("°C "));
+  //Serial.print(f);
+  //Serial.println(F("°F"));
+  //Serial.println("");
 
   LCDWriteLines(line1, line2);
 
-  Serial.print(analogRead(A2));
-  Serial.print(' ');
-  Serial.println(analogRead(A3));
+  //Serial.print(analogRead(A2));
+  //Serial.print(' ');
+  //Serial.println(analogRead(A3));
 
   delay(1000); 
   
   //digitalWrite(pumpPin, HIGH);
   
   */
-}
-//This is a function used to get the soil moisture content
-int readSoil()
-{
-  digitalWrite(soilPower, HIGH);
-  delay(10);
-  moist_val = analogRead(soilPin); 
-  digitalWrite(soilPower, LOW);
-  return moist_val;
 }
