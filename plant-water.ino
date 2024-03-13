@@ -129,7 +129,11 @@ int TickFct_LightInput(int state);
 int TickFct_PumpController(int state);
 
 // Task Enumeration Definitions
-enum LO_States {LO_init, LO_Update}; //LCD Output
+enum LO_States {LO_init, 
+                Temp, Temp_To_Threshold, Temp_To_Humidity,
+                Threshold, Threshold_To_Temp, Threshold_To_Light, 
+                Light, Light_To_Threshold, Light_To_Humidity,
+                Humidity, Humidity_To_Light, Humidity_To_Temp}; //LCD Output
 enum JI_States {JI_init, JI_Sample}; // Joystick Input
 enum TH_States {TH_init, TH_Sample}; // Temperature Humidity
 enum SI_States {SI_init, SI_Sample}; // Soil Input
@@ -216,18 +220,162 @@ int TickFct_JoystickInput(int state) {
 int TickFct_LCDOutput(int state) {
   switch (state) { // State Transitions
     case LO_init:
-      state = LO_Update;
-    break;
-
-    case LO_Update:
-      state = LO_Update;
-    break;
+      state = Temp;
+      break;
+    //Temp states
+    case Temp:
+      if(/*Joystick left*/){
+        state = Temp_To_Threshold;
+      }
+      if(/*Joystick right*/){
+        state = Temp_To_Humidity;
+      }
+      break;
+    case Temp_To_Threshold:
+      if(/*Joystick Neutral*/){
+        state = Threshold;
+      }
+      break;
+    case Temp_To_Humidity:
+      if(/*Joystick Neutral*/){
+        state = Humidity;
+      }
+      break;
+    //Threshold states
+    case Threshold:
+      if(/*Joystick left*/){
+        state = Threshold_To_Light;
+      }
+      if(/*Joystick right*/){
+        state = Threshold_To_Temp;
+      }
+      break;
+    case Threshold_To_Light:
+      if(/*Joystick Neutral*/){
+        state = Light;
+      }
+      break;
+    case Threshold_To_Temp:
+      if(/*Joystick Neutral*/){
+        state = Temp;
+      }
+      break;
+    //Light states
+    case Light:
+      if(/*Joystick left*/){
+        state = Light_To_Humidity;
+      }
+      if(/*Joystick right*/){
+        state = Threshold_To_Temp;
+      }
+      break;
+    case Light_To_Humidity:
+      if(/*Joystick Neutral*/){
+        state = Humidity;
+      }
+      break;
+    case Threshold_To_Temp:
+      if(/*Joystick Neutral*/){
+        state = Temp;
+      }
+      break;
+    //Humidity
+    case Humidity:
+      if(/*Joystick left*/){
+        state = Humidity_To_Temp;
+      }
+      if(/*Joystick right*/){
+        state = Humidity_To_Light;
+      }
+      break;
+    case Humidity_To_Temp:
+      if(/*Joystick Neutral*/){
+        state = Temp;
+      }
+      break;
+    case Humidity_To_Light:
+      if(/*Joystick Neutral*/){
+        state = Light;
+      }
+      break;
+    default:
+      break;
   }
 
   switch (state) { // State Actions
-    case LO_Update:
+    case LO_init:
+      lcd.begin(16, 2);
+      lcd.display();
+      break;
+    //Temp states
+    case Temp:
+      line1 = "Temp: ";
+      line2 = "Avg. Temp:";
       LCDWriteLines(line1, line2);
-    break;
+      break;
+    case Temp_To_Threshold:
+      line1 = "To Do";
+      line2 = "Threshold";
+      LCDWriteLines(line1, line2);
+      break;
+    case Temp_To_Humidity:
+      line1 = "Humidity: ";
+      line2 = "Avg Humidity: ";
+      LCDWriteLines(line1, line2);
+      break;
+    //Threshold states
+    case Threshold:
+      line1 = "To Do";
+      line2 = "Threshold";
+      LCDWriteLines(line1, line2);
+      break;
+    case Threshold_To_Light:
+      line1 = "Measured Light: ";
+      line2 = "Avg Light: ";
+      LCDWriteLines(line1, line2);
+      break;
+    case Threshold_To_Temp:
+      line1 = "Temp: ";
+      line2 = "Avg. Temp:";
+      LCDWriteLines(line1, line2);
+      break;
+    //Light states
+    case Light:
+      line1 = "Measured Light: ";
+      line2 = "Avg Light: ";
+      LCDWriteLines(line1, line2);
+      break;
+    case Light_To_Humidity:
+      line1 = "Humidity: ";
+      line2 = "Avg Humidity: ";
+      LCDWriteLines(line1, line2);
+      break;
+    case Threshold_To_Temp:
+      line1 = "Temp: ";
+      line2 = "Avg. Temp:";
+      LCDWriteLines(line1, line2);
+      break;
+    //Humidity
+    case Humidity:
+      line1 = "Humidity: ";
+      line2 = "Avg Humidity: ";
+      LCDWriteLines(line1, line2);
+      break;
+    case Humidity_To_Temp:
+      line1 = "Temp: ";
+      line2 = "Avg. Temp:";
+      LCDWriteLines(line1, line2);
+      break;
+    case Humidity_To_Light:
+      line1 = "Measured Light: ";
+      line2 = "Avg Light: ";
+      LCDWriteLines(line1, line2);
+      break;
+    default:
+      Line1 = "Default case";
+      Line2 = "Possible bug?";
+      LCDWriteLines(line1, line2);
+      break;
   }
   return state;
 }
