@@ -104,7 +104,7 @@ typedef struct task {
    int (*TickFct)(int);        // Task tick function
 } task;
 
-const unsigned char tasksNum = 6;
+const unsigned char tasksNum = 7;
 task tasks[tasksNum];
 
 // Task Periods
@@ -114,8 +114,7 @@ const unsigned long periodTempHumidInput = 3600000; // Every 60 mins
 const unsigned long periodSoilInput = 900000; // 15 min
 const unsigned long periodLightInput = 3600000; // 60 min
 const unsigned long periodPumpController = 1000; // 0.1 sec 
-//const unsigned long periodController = 100;
-//const unsigned long periodCursor = 100;
+const unsigned long periodDisplayController = 100; // 0.1s
 
 // GCD 
 const unsigned long tasksPeriodGCD = 100;
@@ -127,30 +126,37 @@ int TickFct_TempHumidInput(int state);
 int TickFct_SoilInput(int state);
 int TickFct_LightInput(int state);
 int TickFct_PumpController(int state);
+int TickFct_DisplayController(int state);
 
 // Task Enumeration Definitions
-enum LO_States {LO_init, 
-                Temp, Temp_To_Threshold, Temp_To_Humidity,
-                Threshold, Threshold_To_Temp, Threshold_To_Light, 
-                Light, Light_To_Threshold, Light_To_Humidity,
-                Humidity, Humidity_To_Light, Humidity_To_Temp}; //LCD Output
+enum LO_States {LO_init, LO_Update}; //LCD Output
+enum DC_States {DC_init, 
+                DC_Temp, DC_Temp_To_Threshold, DC_Temp_To_Humidity,
+                DC_Threshold, DC_Threshold_To_Temp, DC_Threshold_To_Light, 
+                DC_Light, DC_Light_To_Threshold, DC_Light_To_Humidity,
+                DC_Humidity, DC_Humidity_To_Light, DC_Humidity_To_Temp}; // Display Controller
 enum JI_States {JI_init, JI_Sample}; // Joystick Input
 enum TH_States {TH_init, TH_Sample}; // Temperature Humidity
 enum SI_States {SI_init, SI_Sample}; // Soil Input
 enum LI_States {LI_init, LI_Sample}; // Light Input
 enum PC_States {PC_init, PC_Wait, PC_On}; // Pump Controller
-//enum C_States {C_init, C_Off, C_Song1_Trans, C_Song1, C_Song2, C_Song3, C_Song2_Trans, C_Song3_Trans};
 enum JS_Positions {Up, Down, Left, Right, Neutral} JS_Pos = Neutral;
-//enum CP_States {CP_init, CP_TL, CP_TR, CP_BL, CP_BR};
-//enum Cursor_Positions {TopLeft, TopRight, BotLeft, BotRight} C_Pos = BotRight;
-//int buttonState = 1;
 
 void LCDWriteLines(String line1, String line2) {
   lcd.clear();          
   lcd.setCursor(0, 0);
   lcd.print(line1);
-  lcd.setCursor(0,1);
+  lcd.setCursor(0, 1);
   lcd.print(line2);
+}
+
+int readSoil()
+{
+  digitalWrite(soilPower, HIGH);
+  delay(10);
+  moist_val = analogRead(soilPin); 
+  digitalWrite(soilPower, LOW);
+  return moist_val;
 }
 
 void TimerISR() {
@@ -220,166 +226,181 @@ int TickFct_JoystickInput(int state) {
 int TickFct_LCDOutput(int state) {
   switch (state) { // State Transitions
     case LO_init:
-      state = Temp;
+      state = LO_Update;
+    break;
+
+    case LO_Update:
+      state = LO_Update;
+    break;
+  }
+
+  switch (state) { // State Actions
+    case LO_Update:
+      LCDWriteLines(line1, line2);
+    break;
+  }
+  return state;
+}
+
+// Task 3 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+int TickFct_DisplayController(int state) {
+  switch (state) { // State Transitions
+    case DC_init:
+      state = DC_Temp;
       break;
+
     //Temp states
-    case Temp:
-      if(/*Joystick left*/){
-        state = Temp_To_Threshold;
+    case DC_Temp:
+      if(JS_Pos == Left){
+        state = DC_Temp_To_Threshold;
       }
-      if(/*Joystick right*/){
-        state = Temp_To_Humidity;
-      }
-      break;
-    case Temp_To_Threshold:
-      if(/*Joystick Neutral*/){
-        state = Threshold;
+      if(JS_Pos == Right){
+        state = DC_Temp_To_Humidity;
       }
       break;
-    case Temp_To_Humidity:
-      if(/*Joystick Neutral*/){
-        state = Humidity;
+    case DC_Temp_To_Threshold:
+      if(JS_Pos == Neutral){
+        state = DC_Threshold;
       }
       break;
+    case DC_Temp_To_Humidity:
+      if(JS_Pos == Neutral){
+        state = DC_Humidity;
+      }
+      break;
+      
     //Threshold states
-    case Threshold:
-      if(/*Joystick left*/){
-        state = Threshold_To_Light;
+    case DC_Threshold:
+      if(JS_Pos == Left){
+        state = DC_Threshold_To_Light;
       }
-      if(/*Joystick right*/){
-        state = Threshold_To_Temp;
-      }
-      break;
-    case Threshold_To_Light:
-      if(/*Joystick Neutral*/){
-        state = Light;
+      if(JS_Pos == Right){
+        state = DC_Threshold_To_Temp;
       }
       break;
-    case Threshold_To_Temp:
-      if(/*Joystick Neutral*/){
-        state = Temp;
+    case DC_Threshold_To_Light:
+      if(JS_Pos == Neutral){
+        state = DC_Light;
       }
       break;
+    case DC_Threshold_To_Temp:
+      if(JS_Pos == Neutral){
+        state = DC_Temp;
+      }
+      break;
+
     //Light states
-    case Light:
-      if(/*Joystick left*/){
-        state = Light_To_Humidity;
+    case DC_Light:
+      if(JS_Pos == Left){
+        state = DC_Light_To_Humidity;
       }
-      if(/*Joystick right*/){
-        state = Threshold_To_Temp;
-      }
-      break;
-    case Light_To_Humidity:
-      if(/*Joystick Neutral*/){
-        state = Humidity;
+      if(JS_Pos == Right){
+        state = DC_Light_To_Threshold;
       }
       break;
-    case Threshold_To_Temp:
-      if(/*Joystick Neutral*/){
-        state = Temp;
+    case DC_Light_To_Humidity:
+      if(JS_Pos == Neutral){
+        state = DC_Humidity;
       }
       break;
+    case DC_Light_To_Threshold:
+      if(JS_Pos == Neutral){
+        state = DC_Threshold;
+      }
+      break;
+
     //Humidity
-    case Humidity:
-      if(/*Joystick left*/){
-        state = Humidity_To_Temp;
+    case DC_Humidity:
+      if(JS_Pos == Left){
+        state = DC_Humidity_To_Temp;
       }
-      if(/*Joystick right*/){
-        state = Humidity_To_Light;
-      }
-      break;
-    case Humidity_To_Temp:
-      if(/*Joystick Neutral*/){
-        state = Temp;
+      if(JS_Pos == Right){
+        state = DC_Humidity_To_Light;
       }
       break;
-    case Humidity_To_Light:
-      if(/*Joystick Neutral*/){
-        state = Light;
+    case DC_Humidity_To_Temp:
+      if(JS_Pos == Neutral){
+        state = DC_Temp;
+      }
+      break;
+    case DC_Humidity_To_Light:
+      if(JS_Pos == Neutral){
+        state = DC_Light;
       }
       break;
     default:
+      state = DC_init;
       break;
   }
 
   switch (state) { // State Actions
-    case LO_init:
-      lcd.begin(16, 2);
-      lcd.display();
+    case DC_init:
       break;
+
     //Temp states
-    case Temp:
+    case DC_Temp:
       line1 = "Temp: ";
-      line2 = "Avg. Temp:";
-      LCDWriteLines(line1, line2);
+      line2 = "Avg Temp:";
       break;
-    case Temp_To_Threshold:
-      line1 = "To Do";
-      line2 = "Threshold";
-      LCDWriteLines(line1, line2);
+    case DC_Temp_To_Threshold:
+      line1 = "Temp: ";
+      line2 = "Avg Temp:";
       break;
-    case Temp_To_Humidity:
-      line1 = "Humidity: ";
-      line2 = "Avg Humidity: ";
-      LCDWriteLines(line1, line2);
+    case DC_Temp_To_Humidity:
+      line1 = "Temp: ";
+      line2 = "Avg Temp:";
       break;
+
     //Threshold states
-    case Threshold:
+    case DC_Threshold:
       line1 = "To Do";
       line2 = "Threshold";
-      LCDWriteLines(line1, line2);
       break;
-    case Threshold_To_Light:
-      line1 = "Measured Light: ";
-      line2 = "Avg Light: ";
-      LCDWriteLines(line1, line2);
+    case DC_Threshold_To_Light:
+      line1 = "To Do";
+      line2 = "Threshold";
       break;
-    case Threshold_To_Temp:
-      line1 = "Temp: ";
-      line2 = "Avg. Temp:";
-      LCDWriteLines(line1, line2);
+    case DC_Threshold_To_Temp:
+      line1 = "To Do";
+      line2 = "Threshold";
       break;
+
     //Light states
-    case Light:
+    case DC_Light:
       line1 = "Measured Light: ";
       line2 = "Avg Light: ";
-      LCDWriteLines(line1, line2);
       break;
-    case Light_To_Humidity:
-      line1 = "Humidity: ";
-      line2 = "Avg Humidity: ";
-      LCDWriteLines(line1, line2);
+    case DC_Light_To_Humidity:
+      line1 = "Measured Light: ";
+      line2 = "Avg Light: ";
       break;
-    case Threshold_To_Temp:
-      line1 = "Temp: ";
-      line2 = "Avg. Temp:";
-      LCDWriteLines(line1, line2);
+    case DC_Light_To_Threshold:
+      line1 = "Measured Light: ";
+      line2 = "Avg Light: ";
       break;
+
     //Humidity
-    case Humidity:
+    case DC_Humidity:
       line1 = "Humidity: ";
       line2 = "Avg Humidity: ";
-      LCDWriteLines(line1, line2);
       break;
-    case Humidity_To_Temp:
-      line1 = "Temp: ";
-      line2 = "Avg. Temp:";
-      LCDWriteLines(line1, line2);
+    case DC_Humidity_To_Temp:
+      line1 = "Humidity: ";
+      line2 = "Avg Humidity: ";
       break;
-    case Humidity_To_Light:
-      line1 = "Measured Light: ";
-      line2 = "Avg Light: ";
-      LCDWriteLines(line1, line2);
+    case DC_Humidity_To_Light:
+      line1 = "Humidity: ";
+      line2 = "Avg Humidity: ";
       break;
+
     default:
-      Line1 = "Default case";
-      Line2 = "Possible bug?";
-      LCDWriteLines(line1, line2);
+      line1 = "Default case";
+      line2 = "Possible bug?";
       break;
   }
   return state;
 }
-// Task 3 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Task 4 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 int TickFct_TempHumidInput(int state) {
   switch (state) { // State Transitions
     case TH_init:
@@ -413,7 +434,7 @@ int TickFct_TempHumidInput(int state) {
   return state;
 }
 
-// Task 4 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Task 5 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 int TickFct_SoilInput(int state) {
   switch (state) { // State Transitions
     case SI_init:
@@ -437,7 +458,7 @@ int TickFct_SoilInput(int state) {
   return state;
 }
 
-// Task 5 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Task 6 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 int TickFct_LightInput(int state) {
   switch (state) { // State Transitions
     case LI_init:
@@ -468,7 +489,7 @@ int TickFct_LightInput(int state) {
 
 int i = 0;
 
-// Task 6 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Task 7 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 int TickFct_PumpController(int state) {
   switch (state) { // State Transitions
     case PC_init:
@@ -502,7 +523,7 @@ int TickFct_PumpController(int state) {
     break;
 
     case PC_On:
-      digitalWrite(pumpPin, HIGH);
+      //digitalWrite(pumpPin, HIGH);
       Serial.println("Pump On");
       i++;
     break;
@@ -542,6 +563,11 @@ void InitializeTasks() {
   tasks[i].period = periodPumpController;
   tasks[i].elapsedTime = tasks[i].period;
   tasks[i].TickFct = &TickFct_PumpController;
+  ++i;
+  tasks[i].state = DC_init;
+  tasks[i].period = periodDisplayController;
+  tasks[i].elapsedTime = tasks[i].period;
+  tasks[i].TickFct = &TickFct_DisplayController;
   
 }
 
@@ -605,13 +631,4 @@ void loop()
   //digitalWrite(pumpPin, HIGH);
   
   */
-}
-//This is a function used to get the soil moisture content
-int readSoil()
-{
-  digitalWrite(soilPower, HIGH);
-  delay(10);
-  moist_val = analogRead(soilPin); 
-  digitalWrite(soilPower, LOW);
-  return moist_val;
 }
