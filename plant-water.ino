@@ -83,7 +83,8 @@ int soilPower = 5;
 int pumpPin = 3;
 float f = 0; // Latest temp reading
 float h = 0; // Latest Humidity Reading
-int threshold;
+int threshold = 892;
+int pump_flag = 0;
 
 Queue tempData;
 Queue humidData;
@@ -103,15 +104,16 @@ typedef struct task {
    int (*TickFct)(int);        // Task tick function
 } task;
 
-const unsigned char tasksNum = 5;
+const unsigned char tasksNum = 6;
 task tasks[tasksNum];
 
 // Task Periods
 const unsigned long periodLCDOutput = 100; // 0.1 sec
 const unsigned long periodJoystickInput = 100; // 0.1 sec
 const unsigned long periodTempHumidInput = 3600000; // Every 60 mins 
-const unsigned long periodSoilInput = 1800000; // 30 min
-const unsigned long periodLightInput = 5000; // 60 min
+const unsigned long periodSoilInput = 900000; // 15 min
+const unsigned long periodLightInput = 3600000; // 60 min
+const unsigned long periodPumpController = 1000; // 0.1 sec 
 //const unsigned long periodController = 100;
 //const unsigned long periodCursor = 100;
 
@@ -124,6 +126,7 @@ int TickFct_JoystickInput(int state);
 int TickFct_TempHumidInput(int state);
 int TickFct_SoilInput(int state);
 int TickFct_LightInput(int state);
+int TickFct_PumpController(int state);
 
 // Task Enumeration Definitions
 enum LO_States {LO_init, LO_Update}; //LCD Output
@@ -131,6 +134,7 @@ enum JI_States {JI_init, JI_Sample}; // Joystick Input
 enum TH_States {TH_init, TH_Sample}; // Temperature Humidity
 enum SI_States {SI_init, SI_Sample}; // Soil Input
 enum LI_States {LI_init, LI_Sample}; // Light Input
+enum PC_States {PC_init, PC_Wait, PC_On}; // Pump Controller
 //enum C_States {C_init, C_Off, C_Song1_Trans, C_Song1, C_Song2, C_Song3, C_Song2_Trans, C_Song3_Trans};
 enum JS_Positions {Up, Down, Left, Right, Neutral} JS_Pos = Neutral;
 //enum CP_States {CP_init, CP_TL, CP_TR, CP_BL, CP_BR};
@@ -274,6 +278,9 @@ int TickFct_SoilInput(int state) {
    switch (state) { // State Actions
     case SI_Sample:
       moist_val = readSoil();
+      if (moist_val < threshold) {
+        pump_flag = 1;
+      }
       Serial.print("Moisture: ");
       Serial.println(moist_val);
     break;
@@ -311,6 +318,51 @@ int TickFct_LightInput(int state) {
   return state;
 }
 
+int i = 0;
+
+// Task 6 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+int TickFct_PumpController(int state) {
+  switch (state) { // State Transitions
+    case PC_init:
+      state = PC_Wait;
+    break;
+
+    case PC_Wait:
+      if (pump_flag == 0) {
+        state = PC_Wait;
+      }
+      else if (pump_flag == 1) {
+        state = PC_On;
+      }
+    break;
+
+    case PC_On:
+      if (i < 60) {
+        state = PC_On;
+      }
+      else if (i >= 60) {
+        state = PC_Wait;
+        pump_flag = 0;
+      }
+  }
+
+   switch (state) { // State Actions
+    case PC_Wait:
+      digitalWrite(pumpPin, LOW);
+      Serial.println("Pump Off");
+      i = 0;
+    break;
+
+    case PC_On:
+      digitalWrite(pumpPin, HIGH);
+      Serial.println("Pump On");
+      i++;
+    break;
+  }
+  
+  return state;
+}
+
 void InitializeTasks() {
   unsigned char i=0;
   tasks[i].state = LO_init;
@@ -338,12 +390,11 @@ void InitializeTasks() {
   tasks[i].elapsedTime = tasks[i].period;
   tasks[i].TickFct = &TickFct_LightInput;
   ++i;
-  /*
-  tasks[i].state = CP_init;
-  tasks[i].period = periodCursor;
+  tasks[i].state = PC_init;
+  tasks[i].period = periodPumpController;
   tasks[i].elapsedTime = tasks[i].period;
-  tasks[i].TickFct = &TickFct_Cursor;
-  */
+  tasks[i].TickFct = &TickFct_PumpController;
+  
 }
 
 void setup() 
@@ -363,13 +414,13 @@ void setup()
   pinMode(soilPower, OUTPUT); //Set D7 as an OUTPUT
   digitalWrite(soilPower, LOW); //Set to LOW so no power is flowing through the sensor
   Serial.println("");
-
-  //digitalWrite(pumpPin, HIGH);
+  digitalWrite(pumpPin, LOW);
 }
 
 void loop() 
 {  
   f = dht.readTemperature(true); // Only works properly in loop for some reason
+  //digitalWrite(pumpPin, HIGH);
   /*
         Serial.print(F("Temperature: "));
         Serial.print(f);
