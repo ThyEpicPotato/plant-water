@@ -114,7 +114,7 @@ const unsigned long periodTempHumidInput = 3600000; // Every 60 mins
 const unsigned long periodSoilInput = 900000; // 15 min
 const unsigned long periodLightInput = 3600000; // 60 min
 const unsigned long periodPumpController = 1000; // 0.1 sec 
-const unsigned long periodDisplayController = 100; // 0.1s
+const unsigned long periodDisplayController = 100; // 0.1 sec
 
 // GCD 
 const unsigned long tasksPeriodGCD = 100;
@@ -596,6 +596,9 @@ void loop()
   f = dht.readTemperature(true); // Only works properly in loop for some reason
   //digitalWrite(pumpPin, HIGH);
   /*
+  line1 = "Line 1 temp";
+  line2 = "Line 2 temp";
+  LCDWriteLines(line1, line2);
         Serial.print(F("Temperature: "));
         Serial.print(f);
         Serial.println(F("°F"));
