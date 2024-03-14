@@ -1,8 +1,6 @@
 // Tape pulls
 // https://www.arduino.cc/reference/en/libraries/queue/
 // https://learn.sparkfun.com/tutorials/soil-moisture-sensor-hookup-guide
-// 892 Max moisture
-// ### Min moisture
 
 #include "DHT.h"
 #include "Timer.h"
@@ -86,10 +84,13 @@ float h = 0; // Latest Humidity Reading
 int threshold = 892;
 int pump_flag = 0;
 int screen_flag = 0;
+int percent = 50;
 
 Queue tempData;
 Queue humidData;
 Queue lightData;
+
+char buffer[20];
 
 String line1 = "Line 1 temp";
 String line2 = "Line 2 temp";
@@ -112,7 +113,7 @@ task tasks[tasksNum];
 const unsigned long periodLCDOutput = 100; // 0.1 sec
 const unsigned long periodJoystickInput = 100; // 0.1 sec
 const unsigned long periodTempHumidInput = 3600000; // Every 60 mins 
-const unsigned long periodSoilInput = 900000; // 15 min
+const unsigned long periodSoilInput = 120000; // 2 min
 const unsigned long periodLightInput = 3600000; // 60 min
 const unsigned long periodPumpController = 1000; // 0.1 sec 
 const unsigned long periodDisplayController = 100; // 0.1 sec
@@ -241,20 +242,40 @@ int TickFct_LCDOutput(int state) {
         line2 = "Line 2 temp";
       }
       else if (screen_flag == 1) {
+        dtostrf(f, 6, 2, buffer);
         line1 = "Temp: ";
-        line2 = "Avg Temp:";
+        line1 += buffer;
+        line1 += " F";
+
+        dtostrf(tempData.getAverage(), 6, 2, buffer);
+        line2 = "Avg: ";
+        line2 += buffer;
+        line2 += " F";
       }
       else if (screen_flag == 2) {
-        line1 = "Humidity: ";
-        line2 = "Avg Humidity: ";
+        dtostrf(h, 6, 2, buffer);
+        line1 = "Humidity:";
+        line1 += buffer;
+        line1 += "%";
+
+        dtostrf(humidData.getAverage(), 6, 2, buffer);
+        line2 = "Avg: ";
+        line2 += buffer;
+        line2 += "%";
       }
       else if (screen_flag == 3) {
-        line1 = "Measured Light: ";
-        line2 = "Avg Light: ";
+        line1 = "Avg # Hrs Light";
+        line2 = "/Day:";
+        dtostrf(lightData.avgDaylightHours(), 6, 2, buffer);
+        line2 += buffer;
+        line2 += " Hrs";
       }
       else if (screen_flag == 4) {
-        line1 = "To Do";
-        line2 = "Threshold";
+        line1 = "Moist: ";
+        line1.concat(moist_val);
+        line2 = "Threshold: ";
+        line2.concat(threshold);
+        //line2 += "%";
       }
       LCDWriteLines(line1, line2);
     break;
@@ -339,7 +360,7 @@ int TickFct_DisplayController(int state) {
       if(JS_Pos == Left){
         state = DC_ToTemp;
       }
-      if(JS_Pos == Right){
+      else if(JS_Pos == Right){
         state = DC_ToLight;
       }
       else {
@@ -371,6 +392,18 @@ int TickFct_DisplayController(int state) {
     //Threshold states
     case DC_Threshold:
       screen_flag = 4;
+      if (JS_Pos == Up) {
+        if (percent < 100) {
+          percent += 1;
+          threshold = map(percent, 0, 100, 0, 1023);
+        }
+      }
+      else if (JS_Pos == Down) {
+        if (percent > 0) {
+          percent -= 1;
+          threshold = map(percent, 0, 100, 0, 1023);
+        }
+      }
       break;
     case DC_ToThreshold:
       screen_flag = 4;
@@ -394,6 +427,7 @@ int TickFct_DisplayController(int state) {
   }
   return state;
 }
+
 // Task 4 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 int TickFct_TempHumidInput(int state) {
   switch (state) { // State Transitions
@@ -441,6 +475,8 @@ int TickFct_SoilInput(int state) {
    switch (state) { // State Actions
     case SI_Sample:
       moist_val = readSoil();
+      threshold = map(percent, 0, 100, 0, 1023);
+      //Serial.println(threshold);
       if (moist_val < threshold) {
         pump_flag = 1;
       }
@@ -517,7 +553,7 @@ int TickFct_PumpController(int state) {
     break;
 
     case PC_On:
-      //digitalWrite(pumpPin, HIGH);
+      digitalWrite(pumpPin, HIGH);
       //Serial.println("Pump On");
       i++;
     break;
@@ -588,42 +624,4 @@ void setup()
 void loop() 
 {  
   f = dht.readTemperature(true); // Only works properly in loop for some reason
-  //digitalWrite(pumpPin, HIGH);
-  /*
-  LCDWriteLines(line1, line2);
-        //Serial.print(F("Temperature: "));
-        //Serial.print(f);
-        //Serial.println(F("°F"));
-  
-  float h = dht.readHumidity();
-  //Celsius
-  float t = dht.readTemperature();
-  //Fahrenheit
-  f = dht.readTemperature(true);
-
-  //Serial.print(F("Light Level: "));
-  //Serial.println(analogRead(A0));
-  //Serial.print("Soil Moisture = ");    
-  //Serial.println(readSoil());
-  //Serial.print(F("Humidity: "));
-  //Serial.print(h);
-  //Serial.println(F("%"));
-  //Serial.print(F("Temperature: "));
-  //Serial.print(t);
-  //Serial.print(F("°C "));
-  //Serial.print(f);
-  //Serial.println(F("°F"));
-  //Serial.println("");
-
-  LCDWriteLines(line1, line2);
-
-  //Serial.print(analogRead(A2));
-  //Serial.print(' ');
-  //Serial.println(analogRead(A3));
-
-  delay(1000); 
-  
-  //digitalWrite(pumpPin, HIGH);
-  
-  */
 }
