@@ -1,5 +1,4 @@
 // Tape pulls
-// https://www.arduino.cc/reference/en/libraries/queue/
 // https://learn.sparkfun.com/tutorials/soil-moisture-sensor-hookup-guide
 
 #include "DHT.h"
@@ -112,9 +111,9 @@ task tasks[tasksNum];
 // Task Periods
 const unsigned long periodLCDOutput = 100; // 0.1 sec
 const unsigned long periodJoystickInput = 100; // 0.1 sec
-const unsigned long periodTempHumidInput = 3600000; // Every 60 mins 
-const unsigned long periodSoilInput = 120000; // 2 min
-const unsigned long periodLightInput = 3600000; // 60 min
+const unsigned long periodTempHumidInput = 5000; // Every 60 mins 3600000
+const unsigned long periodSoilInput = 10000; // 2 min 120000
+const unsigned long periodLightInput = 5000; // 60 min 3600000
 const unsigned long periodPumpController = 1000; // 0.1 sec 
 const unsigned long periodDisplayController = 100; // 0.1 sec
 
@@ -158,23 +157,23 @@ int readSoil()
 }
 
 void TimerISR() {
-  /*
+  
   if (JS_Pos == Up) {
-    //Serial.println("Up");
+    Serial.println("Up");
   }
   else if (JS_Pos == Down) {
-    //Serial.println("Down");
+    Serial.println("Down");
   }
   else if (JS_Pos == Left) {
-    //Serial.println("Left");
+    Serial.println("Left");
   }
   else if (JS_Pos == Right) {
-    //Serial.println("Right");
+    Serial.println("Right");
   }
   else if (JS_Pos == Neutral) {
-    //Serial.println("Neutral");
+    Serial.println("Neutral");
   }
-  */
+  
   
   unsigned char i;
   for (i = 0; i < tasksNum; ++i) { // Heart of the scheduler code
@@ -201,6 +200,11 @@ int TickFct_JoystickInput(int state) {
 
    switch (state) { // State Actions
     case JI_Sample:
+      /*
+      Serial.print(analogRead(A2));
+      Serial.print(" ");
+      Serial.println(analogRead(A3));
+      */
       if ((analogRead(A3) > 700) && (analogRead(A3) > analogRead(A2)) && ((1023 - analogRead(A3)) < analogRead(A2))) {
         JS_Pos = Left;
       }
@@ -212,7 +216,6 @@ int TickFct_JoystickInput(int state) {
       }
       else if ((analogRead(A2) < 300) && (analogRead(A2) < analogRead(A3)) && (analogRead(A2) < (1023 - analogRead(A3)))) {
         JS_Pos = Up;
-        
       }
       else {
         JS_Pos = Neutral;
@@ -392,6 +395,7 @@ int TickFct_DisplayController(int state) {
     //Threshold states
     case DC_Threshold:
       screen_flag = 4;
+      //Serial.println(JS_Pos);
       if (JS_Pos == Up) {
         if (percent < 100) {
           percent += 1;
@@ -476,9 +480,12 @@ int TickFct_SoilInput(int state) {
     case SI_Sample:
       moist_val = readSoil();
       threshold = map(percent, 0, 100, 0, 1023);
-      //Serial.println(threshold);
+      Serial.print(moist_val);
+      Serial.print(" ");
+      Serial.println(threshold);
       if (moist_val < threshold) {
         pump_flag = 1;
+        Serial.println("flag up");
       }
       //Serial.print("Moisture: ");
       //Serial.println(moist_val);
@@ -529,9 +536,11 @@ int TickFct_PumpController(int state) {
     case PC_Wait:
       if (pump_flag == 0) {
         state = PC_Wait;
+        
       }
       else if (pump_flag == 1) {
         state = PC_On;
+        Serial.println("flag recieved");
       }
     break;
 
@@ -548,13 +557,13 @@ int TickFct_PumpController(int state) {
    switch (state) { // State Actions
     case PC_Wait:
       digitalWrite(pumpPin, LOW);
-      //Serial.println("Pump Off");
+      Serial.println("Pump Off");
       i = 0;
     break;
 
     case PC_On:
       digitalWrite(pumpPin, HIGH);
-      //Serial.println("Pump On");
+      Serial.println("Pump On");
       i++;
     break;
   }
@@ -609,7 +618,7 @@ void setup()
   TimerSet(tasksPeriodGCD);
   TimerOn();
 
-  //Serial.begin(9600);
+  Serial.begin(9600);
 
   dht.begin();
   lcd.begin(16, 2);
